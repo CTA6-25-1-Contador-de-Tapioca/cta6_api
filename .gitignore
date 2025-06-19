@@ -1,0 +1,36 @@
+# Node.js
+node_modules/
+dist/
+build/
+.env
+.env.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+
+# IDEs
+.vscode/
+.idea/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Test Coverage
+coverage/
+
+# Optional: PM2 process manager
+pids/
+*.pid
+*.seed
+
+# Optional: Docker
+docker-compose.override.yml
