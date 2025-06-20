@@ -3,7 +3,7 @@ import { mqttClient } from './mqtt';
 import { client } from './db';
 import { z } from 'zod';
 import { Point } from '@influxdata/influxdb-client';
-import { app } from './http';
+import { app, io } from './http';
 import { env } from './config';
 
 const org = env.INFLUX_ORG;
@@ -16,6 +16,7 @@ const payloadSchema = z.object({
 	value: z.number(),
 });
 const port = env.EXPRESS_PORT;
+const filtrosPorSocket = new Map<string, string>();
 
 type InfluxDataPoint = {
 	timestamp: string;
@@ -50,6 +51,19 @@ mqttClient.on('message', async (topic, message) => {
 
 	writeClient.writePoint(point);
 	await writeClient.flush();
+
+	for (const [id, bagType] of filtrosPorSocket.entries()) {
+		if (bagType === data.data.bagType) {
+			const socket = io.sockets.sockets.get(id);
+			if (socket) {
+				socket.emit('novo-dado', {
+					bagType: data.data.bagType,
+					timestamp: data.data.timestamp,
+					value: data.data.value,
+				});
+			}
+		}
+	}
 });
 
 function getGroupInterval(period: string): string {
@@ -60,14 +74,20 @@ function getGroupInterval(period: string): string {
 }
 
 app.get('/dados', async (req, res) => {
-	const period = req.query.period;
-	const groupInterval = getGroupInterval(period as string);
+	const period = req.query.period as string;
+	const bagType = req.query.bagType as string;
+	const groupInterval = getGroupInterval(period);
+
+	const bagTypeFilter = bagType
+		? `|> filter(fn: (r) => r["bagType"] == "${bagType}")`
+		: '';
 
 	const query = `
     from(bucket: "${bucket}")
       |> range(start: -${period})
       |> filter(fn: (r) => r._measurement == "sensor_data")
       |> filter(fn: (r) => r._field == "value")
+      ${bagTypeFilter}
       |> aggregateWindow(every: ${groupInterval}, fn: count, createEmpty: false)
       |> group(columns: ["_time", "bagType"])
       |> sort(columns: ["_time"])
@@ -96,6 +116,18 @@ app.get('/dados', async (req, res) => {
 	} catch (err) {
 		res.status(500).send('Erro inesperado');
 	}
+});
+
+io.on('connection', (socket) => {
+	console.log(`Socket conectado: ${socket.id}`);
+
+	socket.on('subscribe', ({ bagType }) => {
+		filtrosPorSocket.set(socket.id, bagType);
+	});
+
+	socket.on('disconnect', () => {
+		filtrosPorSocket.delete(socket.id);
+	});
 });
 
 app.listen(port, () => {
