@@ -10,6 +10,8 @@ const envSchema = z.object({
 	INFLUX_ORG: z.string(),
 	INFLUX_BUCKET: z.string(),
 
+	EXPRESS_PORT: z.coerce.number(),
+
 	NODE_ENV: z.enum(['development', 'production', 'test']),
 });
 
