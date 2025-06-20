@@ -3,8 +3,8 @@ import { mqttClient } from './mqtt';
 import { client } from './db';
 import { z } from 'zod';
 
-const org = 'teste';
-const bucket = 'teste';
+const org = env.INFLUX_ORG;
+const bucket = env.INFLUX_BUCKET;
 const writeClient = client.getWriteApi(org, bucket, 'ns');
 const payloadSchema = z.object({
 	bagType: z.string(),
