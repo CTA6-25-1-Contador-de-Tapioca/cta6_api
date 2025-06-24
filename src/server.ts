@@ -3,7 +3,7 @@ import { mqttClient } from './mqtt';
 import { client } from './db';
 import { z } from 'zod';
 import { Point } from '@influxdata/influxdb-client';
-import { app, io } from './http';
+import { app, io, server } from './http';
 import { env } from './config';
 
 const org = env.INFLUX_ORG;
@@ -23,6 +23,7 @@ type InfluxDataPoint = {
 	count: number;
 	bagType: string;
 };
+
 mqttClient.on('connect', () => {
 	console.log('✅ MQTT client connected successfully');
 	const topics = ['pedro.neto.704@ufrn.edu.br/teste'];
@@ -67,7 +68,7 @@ mqttClient.on('message', async (topic, message) => {
 });
 
 function getGroupInterval(period: string): string {
-	if (period === '1d') return '1h';
+	if (period === '1d') return '1m';
 	if (period === '7d') return '1d';
 	if (period === '30d') return '1d';
 	return '1h';
@@ -130,6 +131,6 @@ io.on('connection', (socket) => {
 	});
 });
 
-app.listen(port, () => {
+server.listen(port, () => {
 	console.log(`✅ Server is running on ${port}`);
 });
