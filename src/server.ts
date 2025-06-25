@@ -8,7 +8,7 @@ import { env } from './config';
 
 const org = env.INFLUX_ORG;
 const bucket = env.INFLUX_BUCKET;
-const writeClient = client.getWriteApi(org, bucket, 'ns');
+const writeClient = client.getWriteApi(org, bucket, 'ms');
 const queryClient = client.getQueryApi(org);
 const payloadSchema = z.object({
 	bagType: z.string(),
