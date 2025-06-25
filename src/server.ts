@@ -12,14 +12,13 @@ const writeClient = client.getWriteApi(org, bucket, 'ms');
 const queryClient = client.getQueryApi(org);
 const payloadSchema = z.object({
 	bagType: z.string(),
-	timestamp: z.number(),
 	value: z.number(),
 });
 const port = env.EXPRESS_PORT;
 const filtrosPorSocket = new Map<string, string>();
 
 type InfluxDataPoint = {
-	timestamp: string;
+	timestamp: Date;
 	count: number;
 	bagType: string;
 };
@@ -45,7 +44,7 @@ mqttClient.on('message', async (topic, message) => {
 		return;
 	}
 
-	const date = new Date(data.data.timestamp);
+	const date = new Date();
 
 	const point = new Point('sensor_data')
 		.tag('bagType', data.data.bagType)
@@ -71,17 +70,10 @@ mqttClient.on('message', async (topic, message) => {
 	}
 });
 
-function getGroupInterval(period: string): string {
-	if (period === '1d') return '1m';
-	if (period === '7d') return '1d';
-	if (period === '30d') return '1d';
-	return '1h';
-}
-
 app.get('/dados', async (req, res) => {
 	const period = req.query.period as string;
 	const bagType = req.query.bagType as string;
-	const groupInterval = getGroupInterval(period);
+	const groupInterval = req.query.groupInterval as string;
 
 	const bagTypeFilter = bagType
 		? `|> filter(fn: (r) => r["bagType"] == "${bagType}")`
