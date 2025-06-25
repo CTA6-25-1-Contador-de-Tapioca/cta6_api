@@ -44,7 +44,9 @@ mqttClient.on('message', async (topic, message) => {
 		console.error('❌ Invalid payload:', data.error);
 		return;
 	}
+
 	const date = new Date(data.data.timestamp);
+
 	const point = new Point('sensor_data')
 		.tag('bagType', data.data.bagType)
 		.intField('value', data.data.value)
@@ -53,13 +55,15 @@ mqttClient.on('message', async (topic, message) => {
 	writeClient.writePoint(point);
 	await writeClient.flush();
 
+	const isoTimestamp = date.toISOString(); // timestamp real, não arredondado
+
 	for (const [id, bagType] of filtrosPorSocket.entries()) {
 		if (bagType === data.data.bagType) {
 			const socket = io.sockets.sockets.get(id);
 			if (socket) {
 				socket.emit('novo-dado', {
 					bagType: data.data.bagType,
-					timestamp: data.data.timestamp,
+					timestamp: isoTimestamp,
 					value: data.data.value,
 				});
 			}
