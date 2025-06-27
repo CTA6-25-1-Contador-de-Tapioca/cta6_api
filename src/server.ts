@@ -1,10 +1,10 @@
 import 'dotenv/config';
-import { mqttClient } from './mqtt';
-import { client } from './db';
-import { z } from 'zod';
 import { Point } from '@influxdata/influxdb-client';
-import { app, io, server } from './http';
+import { z } from 'zod';
 import { env } from './config';
+import { client } from './db';
+import { app, io, server } from './http';
+import { mqttClient } from './mqtt';
 
 const org = env.INFLUX_ORG;
 const bucket = env.INFLUX_BUCKET;
@@ -65,6 +65,9 @@ mqttClient.on('message', async (topic, message) => {
 					timestamp: isoTimestamp,
 					value: data.data.value,
 				});
+				socket.emit('daily', {
+					count: 1,
+				});
 			}
 		}
 	}
@@ -78,17 +81,20 @@ app.get('/dados', async (req, res) => {
 	const bagTypeFilter = bagType
 		? `|> filter(fn: (r) => r["bagType"] == "${bagType}")`
 		: '';
+	const rangeFilter = period === 'today' 
+		? '|> range(start: today())'
+		: `|> range(start: -${period})`;
 
 	const query = `
-    from(bucket: "${bucket}")
-      |> range(start: -${period})
-      |> filter(fn: (r) => r._measurement == "sensor_data")
-      |> filter(fn: (r) => r._field == "value")
-      ${bagTypeFilter}
-      |> aggregateWindow(every: ${groupInterval}, fn: count, createEmpty: false)
-      |> group(columns: ["_time", "bagType"])
-      |> sort(columns: ["_time"])
-  `;
+	from(bucket: "${bucket}")
+		${rangeFilter}
+		|> filter(fn: (r) => r._measurement == "sensor_data")
+		|> filter(fn: (r) => r._field == "value")
+		${bagTypeFilter}
+		|> aggregateWindow(every: ${groupInterval}, fn: count, createEmpty: false)
+		|> group(columns: ["_time", "bagType"])
+		|> sort(columns: ["_time"])
+	`;
 
 	const result: InfluxDataPoint[] = [];
 
@@ -111,6 +117,50 @@ app.get('/dados', async (req, res) => {
 			},
 		});
 	} catch (err) {
+		res.status(500).send('Erro inesperado');
+	}
+});
+
+app.get('/dados/daily', async (req, res) => {
+	const bagType = req.query.bagType as string;
+
+	if (!bagType) {
+		res.status(400).send('Parâmetro "bagType" é obrigatório.');
+		return;
+	}
+
+	const query = `
+    from(bucket: "${bucket}")
+      |> range(start: today())
+      |> filter(fn: (r) => r._measurement == "sensor_data")
+      |> filter(fn: (r) => r._field == "value")
+      |> filter(fn: (r) => r["bagType"] == "${bagType}")
+      |> aggregateWindow(every: 1d, fn: count, createEmpty: false)
+      |> group(columns: ["bagType"])
+      |> sum()
+  `;
+
+	let total = 0;
+
+	try {
+		queryClient.queryRows(query, {
+			next(row, tableMeta) {
+				const o = tableMeta.toObject(row);
+				total = o._value;
+			},
+			error(error) {
+				console.error(error);
+				res.status(500).send('Erro ao consultar o InfluxDB');
+			},
+			complete() {
+				res.json({
+					bagType,
+					countToday: total,
+				});
+			},
+		});
+	} catch (err) {
+		console.error(err);
 		res.status(500).send('Erro inesperado');
 	}
 });
