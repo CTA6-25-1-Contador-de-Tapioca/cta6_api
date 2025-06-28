@@ -81,9 +81,10 @@ app.get('/dados', async (req, res) => {
 	const bagTypeFilter = bagType
 		? `|> filter(fn: (r) => r["bagType"] == "${bagType}")`
 		: '';
-	const rangeFilter = period === 'today' 
-		? '|> range(start: today())'
-		: `|> range(start: -${period})`;
+	const rangeFilter =
+		period === 'today'
+			? '|> range(start: today())'
+			: `|> range(start: -${period})`;
 
 	const query = `
 	from(bucket: "${bucket}")
@@ -157,6 +158,54 @@ app.get('/dados/daily', async (req, res) => {
 					bagType,
 					countToday: total,
 				});
+			},
+		});
+	} catch (err) {
+		console.error(err);
+		res.status(500).send('Erro inesperado');
+	}
+});
+
+app.get('/dados/byBagType', async (req, res) => {
+	const period = req.query.period as string;
+
+	if (!period) {
+		res.status(400).send('Parâmetro "period" é obrigatório.');
+		return;
+	}
+
+	const rangeFilter =
+		period === 'today'
+			? '|> range(start: today())'
+			: `|> range(start: -${period})`;
+
+	const query = `
+		from(bucket: "${bucket}")
+			${rangeFilter}
+			|> filter(fn: (r) => r._measurement == "sensor_data")
+			|> filter(fn: (r) => r._field == "value")
+			|> group(columns: ["bagType"])
+			|> count()
+			|> keep(columns: ["_value", "bagType"])
+	`;
+
+	const result: { bagType: string; count: number }[] = [];
+
+	try {
+		queryClient.queryRows(query, {
+			next(row, tableMeta) {
+				const o = tableMeta.toObject(row);
+				result.push({
+					bagType: o.bagType,
+					count: o._value,
+				});
+			},
+			error(error) {
+				console.error(error);
+				res.status(500).send('Erro ao consultar o InfluxDB');
+			},
+			complete() {
+				res.json(result);
 			},
 		});
 	} catch (err) {
