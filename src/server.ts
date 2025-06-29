@@ -219,6 +219,47 @@ app.get('/dados/byBagType', async (req, res) => {
 	}
 });
 
+app.get('/dados/avgPerHour', async (req, res) => {
+	const bagType = req.query.bagType as string;
+
+	if (!bagType) {
+		res.status(400).send('Parâmetro "bagType" é obrigatório.');
+		return;
+	}
+
+	const query = `
+		from(bucket: "${bucket}")
+			|> range(start: today())
+			|> filter(fn: (r) => r._measurement == "sensor_data")
+			|> filter(fn: (r) => r._field == "value")
+			|> filter(fn: (r) => r.bagType == "${bagType}")
+			|> aggregateWindow(every: 1h, fn: sum, createEmpty: false)
+			|> mean()
+			|> keep(columns: ["_value"])
+	`;
+
+	try {
+		let averagePerHour = 0;
+
+		queryClient.queryRows(query, {
+			next(row, tableMeta) {
+				const o = tableMeta.toObject(row);
+				averagePerHour = o._value;
+			},
+			error(error) {
+				console.error(error);
+				res.status(500).send('Erro ao consultar o InfluxDB');
+			},
+			complete() {
+				res.json({ averagePerHour });
+			},
+		});
+	} catch (err) {
+		console.error(err);
+		res.status(500).send('Erro inesperado');
+	}
+});
+
 io.on('connection', (socket) => {
 	console.log(`Socket conectado: ${socket.id}`);
 
