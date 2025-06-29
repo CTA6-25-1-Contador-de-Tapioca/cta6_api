@@ -1,5 +1,5 @@
-import 'dotenv/config';
 import { Point } from '@influxdata/influxdb-client';
+import 'dotenv/config';
 import { z } from 'zod';
 import { env } from './config';
 import { client } from './db';
@@ -56,10 +56,9 @@ mqttClient.on('message', async (topic, message) => {
 
 	const isoTimestamp = date.toISOString(); // timestamp real, não arredondado
 
-	
 	io.emit('byBagType', {
 		bagType: data.data.bagType,
-		count: 1
+		count: 1,
 	});
 
 	for (const [id, bagType] of filtrosPorSocket.entries()) {
