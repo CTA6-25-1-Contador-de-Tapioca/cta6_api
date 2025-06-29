@@ -56,6 +56,12 @@ mqttClient.on('message', async (topic, message) => {
 
 	const isoTimestamp = date.toISOString(); // timestamp real, não arredondado
 
+	
+	io.emit('byBagType', {
+		bagType: data.data.bagType,
+		count: 1
+	});
+
 	for (const [id, bagType] of filtrosPorSocket.entries()) {
 		if (bagType === data.data.bagType) {
 			const socket = io.sockets.sockets.get(id);
