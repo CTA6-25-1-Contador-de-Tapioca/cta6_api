@@ -25,7 +25,10 @@ type InfluxDataPoint = {
 
 mqttClient.on('connect', () => {
 	console.log('✅ MQTT client connected successfully');
-	const topics = ['pedro.neto.704@ufrn.edu.br/teste'];
+	const topics = [
+		'pedro.neto.704@ufrn.edu.br/teste',
+		'pedro.neto.704@ufrn.edu.br/daily',
+	];
 
 	mqttClient.subscribe(topics, (err) => {
 		if (err) {
@@ -44,6 +47,46 @@ mqttClient.on('message', async (topic, message) => {
 		return;
 	}
 
+	if (topic === 'pedro.neto.704@ufrn.edu.br/daily') {
+		const query = `
+			from(bucket: "${bucket}")
+				|> range(start: today())
+				|> filter(fn: (r) => r._measurement == "sensor_data")
+				|> filter(fn: (r) => r._field == "value")
+				|> filter(fn: (r) => r["bagType"] == "${data.data.bagType}")
+				|> aggregateWindow(every: 1d, fn: count, createEmpty: false)
+				|> group(columns: ["bagType"])
+				|> sum()
+		`;
+
+		try {
+			let dailyCount = 0;
+
+			queryClient.queryRows(query, {
+				next(row, tableMeta) {
+					const o = tableMeta.toObject(row);
+					dailyCount = o._value || 0;
+				},
+				error(error) {
+					console.error('Erro ao consultar contagem diária:', error);
+				},
+				complete() {
+					mqttClient.publish(
+						'pedro.neto.704@ufrn.edu.br/daily-count',
+						JSON.stringify({
+							bagType: data.data.bagType,
+							count: dailyCount,
+						}),
+					);
+				},
+			});
+		} catch (err) {
+			console.error('Erro inesperado:', err);
+		}
+
+		return;
+	}
+
 	const date = new Date();
 
 	const point = new Point('sensor_data')
@@ -54,7 +97,7 @@ mqttClient.on('message', async (topic, message) => {
 	writeClient.writePoint(point);
 	await writeClient.flush();
 
-	const isoTimestamp = date.toISOString(); // timestamp real, não arredondado
+	const isoTimestamp = date.toISOString();
 
 	io.emit('byBagType', {
 		bagType: data.data.bagType,
@@ -301,7 +344,6 @@ app.get('/dados/productionDuration', async (req, res) => {
 		res.status(500).send('Erro inesperado');
 	}
 });
-
 
 io.on('connection', (socket) => {
 	console.log(`Socket conectado: ${socket.id}`);
